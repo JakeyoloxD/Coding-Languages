@@ -47,7 +47,8 @@
 
   /* map */
   .map-shell{background:linear-gradient(180deg,var(--bg2),var(--surface));border:1px solid var(--line);border-radius:16px;padding:14px;position:relative}
-  .map-svg{display:block;width:100%;height:auto;max-height:82vh}
+  .map-plot{width:100%;height:clamp(460px,66vh,860px)}
+  #mapsvg{display:block;width:100%;height:100%}
   .grid-line{stroke:var(--line);stroke-width:1;stroke-dasharray:3 6;opacity:.45}
   .axis-label{font-family:"JetBrains Mono",monospace;font-size:13px;fill:var(--ink-faint);letter-spacing:.04em}
   .node{cursor:pointer;outline:none}
@@ -142,12 +143,12 @@
 
     <div class="map-shell">
       <div class="map-tip" id="tip"></div>
-      <svg class="map-svg" viewBox="0 0 1100 740" role="img" aria-label="Scatter plot of programming languages by abstraction level and runtime model">
+      <div class="map-plot"><svg id="mapsvg" role="img" aria-label="Scatter plot of programming languages by abstraction level and runtime model">
         <g id="grid"></g>
-        <text class="axis-label" x="82" y="726" text-anchor="start">compiled / native  &#8594;  interpreted / dynamic</text>
-        <text class="axis-label" x="-380" y="22" transform="rotate(-90)" text-anchor="start">close to the metal  &#8594;  high abstraction</text>
+        <text class="axis-label" id="xaxis">compiled / native  &#8594;  interpreted / dynamic</text>
+        <text class="axis-label" id="yaxis">close to the metal  &#8594;  high abstraction</text>
         <g id="nodes"></g>
-      </svg>
+      </svg></div>
 
       <div class="map-bar">
         <div class="legend" id="legend"></div>
@@ -653,37 +654,31 @@ const LANGS = [
    code:`.card {\n  display: grid;\n  gap: 16px;\n  border-radius: 14px;\n}`}
 ];
 
-/* ---------- map render ---------- */
-const VB={w:1100,h:740}, PX={l:72,r:44,t:44,b:72};
-const plotW=VB.w-PX.l-PX.r, plotH=VB.h-PX.t-PX.b;
-const sx=v=>PX.l+(v/100)*plotW;
-const sy=v=>PX.t+((100-v)/100)*plotH;
-
+/* ---------- map render (responsive) ---------- */
+const svg=document.getElementById("mapsvg");
 const gridG=document.getElementById("grid");
-for(let i=0;i<=4;i++){
-  const x=PX.l+(i/4)*plotW, y=PX.t+(i/4)*plotH;
-  gridG.insertAdjacentHTML("beforeend",
-    `<line class="grid-line" x1="${x}" y1="${PX.t}" x2="${x}" y2="${PX.t+plotH}"/>`+
-    `<line class="grid-line" x1="${PX.l}" y1="${y}" x2="${PX.l+plotW}" y2="${y}"/>`);
-}
-
 const nodesG=document.getElementById("nodes");
+const xAxis=document.getElementById("xaxis");
+const yAxis=document.getElementById("yaxis");
 const tip=document.getElementById("tip");
 const shell=document.querySelector(".map-shell");
 const nodeEls={};
+const mapLangs=LANGS.filter(l=>l.map);
+const SVGNS="http://www.w3.org/2000/svg";
 
-LANGS.filter(l=>l.map).forEach(l=>{
-  const x=sx(l.x), y=sy(l.y);
-  const right=l.x>62;
-  const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+mapLangs.forEach(l=>{
+  const g=document.createElementNS(SVGNS,"g");
   g.setAttribute("class","node"); g.setAttribute("data-id",l.id);
   g.setAttribute("tabindex","0"); g.setAttribute("role","button");
   g.setAttribute("aria-label",l.name+". "+l.tagline);
-  g.innerHTML=
-    `<circle class="ring" cx="${x}" cy="${y}" r="12" stroke="${CAT[l.cat].color}"></circle>`+
-    `<circle class="dot" cx="${x}" cy="${y}" r="5" fill="${CAT[l.cat].color}"></circle>`+
-    `<text x="${right?x-14:x+14}" y="${y+4}" text-anchor="${right?"end":"start"}">${l.name}</text>`;
-  const dot=g.querySelector(".dot");
+  const ring=document.createElementNS(SVGNS,"circle");
+  ring.setAttribute("class","ring"); ring.setAttribute("r","12"); ring.setAttribute("stroke",CAT[l.cat].color);
+  const dot=document.createElementNS(SVGNS,"circle");
+  dot.setAttribute("class","dot"); dot.setAttribute("r","5"); dot.setAttribute("fill",CAT[l.cat].color);
+  const txt=document.createElementNS(SVGNS,"text");
+  txt.textContent=l.name;
+  g.appendChild(ring); g.appendChild(dot); g.appendChild(txt);
+  g._ring=ring; g._dot=dot; g._txt=txt;
   const showTip=()=>{
     const sr=shell.getBoundingClientRect(), dr=dot.getBoundingClientRect();
     tip.innerHTML=`<b>${l.name}</b><span>${l.tagline}</span>`;
@@ -701,6 +696,32 @@ LANGS.filter(l=>l.map).forEach(l=>{
   nodesG.appendChild(g);
   nodeEls[l.id]=g;
 });
+
+function layoutMap(){
+  const rect=svg.getBoundingClientRect();
+  const W=rect.width, H=rect.height;
+  if(!W||!H) return;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const L=88,R=46,T=42,B=58;
+  const pw=W-L-R, ph=H-T-B;
+  const sx=v=>L+(v/100)*pw, sy=v=>T+((100-v)/100)*ph;
+  gridG.innerHTML="";
+  for(let i=0;i<=4;i++){
+    const gx=L+(i/4)*pw, gy=T+(i/4)*ph;
+    gridG.insertAdjacentHTML("beforeend",
+      `<line class="grid-line" x1="${gx}" y1="${T}" x2="${gx}" y2="${T+ph}"/>`+
+      `<line class="grid-line" x1="${L}" y1="${gy}" x2="${L+pw}" y2="${gy}"/>`);
+  }
+  xAxis.setAttribute("x",L); xAxis.setAttribute("y",H-16); xAxis.setAttribute("text-anchor","start");
+  yAxis.setAttribute("transform",`translate(22 ${T+ph}) rotate(-90)`); yAxis.setAttribute("text-anchor","start");
+  mapLangs.forEach(l=>{
+    const x=sx(l.x), y=sy(l.y), right=l.x>62, g=nodeEls[l.id];
+    g._ring.setAttribute("cx",x); g._ring.setAttribute("cy",y);
+    g._dot.setAttribute("cx",x); g._dot.setAttribute("cy",y);
+    g._txt.setAttribute("x",right?x-14:x+14); g._txt.setAttribute("y",y+4);
+    g._txt.setAttribute("text-anchor",right?"end":"start");
+  });
+}
 
 /* legend */
 const legend=document.getElementById("legend");
@@ -812,6 +833,9 @@ function selectLang(id){
 }
 
 setDomain("all");
+layoutMap();
+if(window.ResizeObserver){ new ResizeObserver(layoutMap).observe(svg); }
+window.addEventListener("resize",layoutMap);
 </script>
 </body>
 </html>
