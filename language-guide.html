@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Language Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e141d; --bg2:#141c28; --surface:#18212f; --surface2:#1f2a3a;
+    --line:#2a384b; --ink:#e7edf5; --ink-dim:#9fb0c4; --ink-faint:#6c7e94;
+    --coral:#ff6b5d;   /* compiled, manual memory */
+    --teal:#3fd0c0;    /* compiled, safe / native */
+    --amber:#f5b54a;   /* VM / JIT bytecode       */
+    --violet:#b491f0;  /* interpreted / dynamic   */
+    --green:#74c98a;   /* functional-first        */
+    --slate:#8aa0b8;   /* declarative / markup    */
+    --focus:#ffd166;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(circle at 18% -10%, #1a2738 0, transparent 45%),
+                     radial-gradient(circle at 95% 0%, #1d2230 0, transparent 40%);
+  }
+  .wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+  a{color:var(--teal)}
+
+  header{padding:64px 0 28px}
+  .eyebrow{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.32em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 18px}
+  h1{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:clamp(2.6rem,6.5vw,5rem);line-height:.98;letter-spacing:-.02em;margin:0}
+  h1 .lo{color:var(--coral)} h1 .hi{color:var(--violet)}
+  .lede{max-width:62ch;margin:22px 0 0;font-size:1.12rem;color:var(--ink-dim)}
+  .lede b{color:var(--ink);font-weight:600}
+
+  section{padding:46px 0}
+  .sec-head{display:flex;align-items:baseline;gap:16px;margin:0 0 22px;flex-wrap:wrap}
+  .sec-num{font-family:"JetBrains Mono",monospace;color:var(--coral);font-size:13px;font-weight:700}
+  .sec-title{font-family:"Space Grotesk",sans-serif;font-weight:500;font-size:1.5rem;margin:0;letter-spacing:-.01em}
+  .sec-sub{color:var(--ink-faint);font-size:.95rem;margin:0;flex-basis:100%}
+
+  /* map */
+  .map-shell{background:linear-gradient(180deg,var(--bg2),var(--surface));border:1px solid var(--line);border-radius:16px;padding:14px;position:relative}
+  .map-svg{display:block;width:100%;height:auto}
+  .grid-line{stroke:var(--line);stroke-width:1;stroke-dasharray:3 6;opacity:.45}
+  .axis-label{font-family:"JetBrains Mono",monospace;font-size:13px;fill:var(--ink-faint);letter-spacing:.04em}
+  .node{cursor:pointer;outline:none}
+  .node circle.dot{transition:r .14s ease}
+  .node .ring{fill:none;opacity:0}
+  .node text{font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:500;fill:var(--ink);pointer-events:none;opacity:0;transition:opacity .12s}
+  .node.lbl text{opacity:1}
+  .node:hover circle.dot,.node:focus-visible circle.dot{r:9}
+  .node:focus-visible .ring{opacity:1;stroke:var(--focus);stroke-width:2;r:14}
+  .node.dim{opacity:.12}
+  .node.sel circle.dot{r:10}
+  .node.sel .ring{opacity:1;r:15}
+  .map-tip{position:absolute;pointer-events:none;z-index:5;max-width:260px;background:#0a0f17;border:1px solid var(--line);border-radius:9px;padding:9px 12px;opacity:0;transform:translate(-50%,-100%);transition:opacity .12s;font-size:.85rem}
+  .map-tip.on{opacity:1}
+  .map-tip b{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--ink)}
+  .map-tip span{display:block;color:var(--ink-dim);margin-top:3px;line-height:1.4}
+
+  .map-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:14px 4px 2px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px}
+  .legend span{display:inline-flex;align-items:center;gap:7px;font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-dim)}
+  .legend i{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .lbl-toggle{font-family:"JetBrains Mono",monospace;font-size:12px;cursor:pointer;background:var(--surface2);border:1px solid var(--line);color:var(--ink-dim);border-radius:999px;padding:7px 13px;white-space:nowrap}
+  .lbl-toggle:hover{border-color:var(--ink-faint);color:var(--ink)}
+  .lbl-toggle.on{background:var(--violet);border-color:var(--violet);color:#160f24;font-weight:700}
+
+  .lane{margin-top:18px;border-top:1px solid var(--line);padding-top:16px}
+  .lane-label{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-faint);letter-spacing:.04em;margin:0 0 10px}
+  .lane-chips{display:flex;flex-wrap:wrap;gap:10px}
+  .lane-chip{font-family:"JetBrains Mono",monospace;font-size:13px;cursor:pointer;background:var(--surface2);border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:7px 14px;display:inline-flex;align-items:center;gap:8px;transition:border-color .15s}
+  .lane-chip:hover{border-color:var(--slate)}
+  .lane-chip i{width:9px;height:9px;border-radius:2px;background:var(--slate);display:inline-block}
+
+  /* filters */
+  .filters{display:flex;flex-wrap:wrap;gap:9px}
+  .chip{font-family:"JetBrains Mono",monospace;font-size:13px;cursor:pointer;background:transparent;border:1px solid var(--line);color:var(--ink-dim);border-radius:999px;padding:8px 15px;transition:all .14s}
+  .chip:hover{border-color:var(--ink-faint);color:var(--ink)}
+  .chip.active{background:var(--coral);border-color:var(--coral);color:#1a0f0c;font-weight:700}
+  .chip:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .count{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-faint);margin:14px 2px 0}
+
+  /* cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s,box-shadow .15s,opacity .2s}
+  .card.hide{display:none}
+  .card.flash{box-shadow:0 0 0 2px var(--focus);border-color:var(--focus)}
+  .card-top{padding:18px 18px 14px;cursor:pointer;display:flex;flex-direction:column;gap:9px}
+  .card-top:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+  .card-name-row{display:flex;align-items:center;gap:11px}
+  .swatch{width:13px;height:13px;border-radius:50%;flex:none}
+  .card-name{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:1.4rem;margin:0;letter-spacing:-.01em}
+  .badge{font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;padding:3px 8px;border-radius:5px;border:1px solid var(--line);color:var(--ink-faint);margin-left:auto;white-space:nowrap}
+  .card-tagline{color:var(--ink-dim);font-size:.95rem;margin:0}
+  .spec{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+  .spec b{font-family:"JetBrains Mono",monospace;font-weight:400;font-size:10.5px;background:var(--bg2);border:1px solid var(--line);color:var(--ink-dim);padding:3px 8px;border-radius:6px}
+  .toggle{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-faint);display:flex;align-items:center;gap:6px;margin-top:4px}
+  .toggle .arr{transition:transform .2s}
+  .card.open .toggle .arr{transform:rotate(90deg)}
+  .detail{max-height:0;overflow:hidden;transition:max-height .3s ease;border-top:1px solid transparent}
+  .card.open .detail{max-height:1600px;border-top-color:var(--line)}
+  .detail-inner{padding:16px 18px 20px;display:flex;flex-direction:column;gap:16px}
+  .blk h4{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 7px;color:var(--ink-faint)}
+  .blk.good h4{color:var(--teal)} .blk.avoid h4{color:var(--coral)}
+  .blk ul{margin:0;padding-left:18px}
+  .blk li{margin:3px 0;font-size:.92rem;color:var(--ink-dim)}
+  .blk li b{color:var(--ink);font-weight:600}
+  .wild{font-size:.9rem;color:var(--ink-dim)} .wild b{color:var(--ink)}
+  pre{margin:0;background:#0a0f17;border:1px solid var(--line);border-radius:9px;padding:13px 14px;overflow-x:auto}
+  code{font-family:"JetBrains Mono",monospace;font-size:12.5px;line-height:1.6;color:#cdd8e6;white-space:pre}
+
+  footer{padding:50px 0 70px;color:var(--ink-faint);font-size:.9rem;border-top:1px solid var(--line);margin-top:30px}
+  footer code{font-size:.85rem;color:var(--ink-dim);background:var(--bg2);padding:1px 5px;border-radius:4px;white-space:normal}
+  @media (max-width:560px){header{padding:44px 0 18px}.node text{font-size:14px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <p class="eyebrow">A field guide for picking the right tool</p>
+    <h1>From the <span class="lo">metal</span><br>to the <span class="hi">meaning</span></h1>
+    <p class="lede">Every language is a deal: how much control you keep versus how much the machine hands back. This plots the popular ones by how close they sit to the hardware and how they run, then says plainly <b>what each is good at and when to reach for it</b>. Hover the map, filter by what you're building, or scroll the cards.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <h2 class="sec-title">The map</h2>
+      <p class="sec-sub">Down = closer to the metal (manual memory, raw pointers). Right = more dynamic at runtime (interpreted, late-bound). Color = how it runs. Hover any dot; filter or toggle labels to read them all.</p>
+    </div>
+
+    <div class="map-shell">
+      <div class="map-tip" id="tip"></div>
+      <svg class="map-svg" viewBox="0 0 1100 740" role="img" aria-label="Scatter plot of programming languages by abstraction level and runtime model">
+        <g id="grid"></g>
+        <text class="axis-label" x="82" y="726" text-anchor="start">compiled / native  &#8594;  interpreted / dynamic</text>
+        <text class="axis-label" x="-380" y="22" transform="rotate(-90)" text-anchor="start">close to the metal  &#8594;  high abstraction</text>
+        <g id="nodes"></g>
+      </svg>
+
+      <div class="map-bar">
+        <div class="legend" id="legend"></div>
+        <button class="lbl-toggle" id="lblToggle" type="button" aria-pressed="false">show all labels</button>
+      </div>
+
+      <div class="lane">
+        <p class="lane-label">// not on the map: these aren't general-purpose languages. structure, style and queries, not logic.</p>
+        <div class="lane-chips" id="lane"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <h2 class="sec-title">What are you building?</h2>
+      <p class="sec-sub">Filter the deck to the languages that actually fit the job.</p>
+    </div>
+    <div class="filters" id="filters"></div>
+    <p class="count" id="count"></p>
+  </div>
+</section>
+
+<section style="padding-top:8px">
+  <div class="wrap"><div class="grid" id="grid"></div></div>
+</section>
+
+<footer>
+  <div class="wrap">
+    There is no "best" language, only the right deal for the job. Assembly gives you everything and protects you from nothing. Python protects you from almost everything and costs you speed. Haskell makes the compiler prove you right before it runs. The map is the trade-off; the cards are the receipts.
+    <br><br>
+    Honest footnote: <code>HTML</code> and <code>CSS</code> describe a document and how it looks, and <code>SQL</code> describes what data you want. None of them loop, branch and compute like the rest, so calling them programming languages is loose talk. They still earn their place in the stack. Also left off as targets rather than languages you hand-write: <code>WebAssembly</code> (a compile target) and <code>Solidity</code> (smart contracts, a niche of its own).
+  </div>
+</footer>
+
+<script>
+const CAT = {
+  manual:{label:"Compiled \u00b7 manual memory", color:"#ff6b5d"},
+  safe:  {label:"Compiled \u00b7 safe / native", color:"#3fd0c0"},
+  vm:    {label:"VM / JIT bytecode",            color:"#f5b54a"},
+  dyn:   {label:"Interpreted / dynamic",        color:"#b491f0"},
+  funcl: {label:"Functional-first",             color:"#74c98a"},
+  decl:  {label:"Declarative / markup",         color:"#8aa0b8"}
+};
+
+const DOMAINS = [
+  ["all","Everything"],["web","Web frontend"],["backend","Backend / APIs"],
+  ["systems","Systems"],["embedded","Embedded"],["scripting","Scripting / automation"],
+  ["security","Security tooling"],["games","Games"],["data","Data / ML"],
+  ["scientific","Scientific / numeric"],["concurrent","Concurrent / distributed"],
+  ["devops","DevOps / infra"],["mobile","Mobile"],["enterprise","Enterprise / legacy"]
+];
+
+// x = runtime (0 compiled .. 100 dynamic), y = abstraction (0 metal .. 100 abstract)
+const LANGS = [
+  // ---------- manual ----------
+  {id:"asm",name:"Assembly",cat:"manual",x:4,y:2,map:true,
+   tagline:"The raw instructions the CPU actually executes. There is nothing below this.",
+   spec:["imperative","none","registers / manual","assembled to machine code"],
+   tags:["systems","embedded","security"],
+   good:[["Total control","every byte and cycle is yours, nothing hidden."],["Reverse engineering and exploitation","reading disassembly is how you understand malware and shellcode."],["The last mile","boot code, interrupt handlers, hand-tuned hot paths."]],
+   reach:["Writing a bootloader, or the few instructions a compiler won't optimise.","Reversing binaries or writing exploit shellcode.","You need to know exactly what the silicon does."],
+   avoid:["Anything large. It does not scale to real programs.","Portability: it is tied to one CPU architecture.","You value your time for ordinary work."],
+   wild:"Bootloaders, firmware hot paths, malware analysis, CTF exploitation, the inside of every binary.",
+   code:`mov eax, 1\nmov ebx, 0\nint 0x80   ; exit(0)`},
+
+  {id:"c",name:"C",cat:"manual",x:6,y:8,map:true,
+   tagline:"The thin layer over the CPU. Old, sharp, everywhere underneath everything.",
+   spec:["imperative","static","manual memory","compiles native"],
+   tags:["systems","embedded","security"],
+   good:[["Talking to hardware","registers, interrupts, memory-mapped IO. Board firmware speaks C."],["Tiny, fast, predictable","no runtime, no GC pauses, fits in kilobytes."],["Foundations","kernels, drivers, libraries every other language calls into."]],
+   reach:["Firmware, drivers, or anything with no OS under it.","Memory and timing are fixed and tight.","You need a stable ABI other languages bind to."],
+   avoid:["Use-after-free and buffer overflows are on you. One slip is a CVE.","You want to ship business logic fast. Everything is hand-rolled.","Strings and data structures will eat your week."],
+   wild:"The Linux kernel, SQLite, Redis, and the firmware on STM32 boards.",
+   code:`#include <stdio.h>\nint main(void){\n    for (int i = 0; i < 3; i++)\n        printf("blink %d\\n", i);\n}`},
+
+  {id:"cpp",name:"C++",cat:"manual",x:11,y:24,map:true,
+   tagline:"C plus four decades of abstractions. Immense power, immense surface area.",
+   spec:["multi-paradigm","static","manual + RAII","compiles native"],
+   tags:["systems","games","embedded","scientific"],
+   good:[["Performance with structure","RAII, templates and the STL give C speed with real data structures."],["Big real-time systems","game engines, browsers, trading systems where microseconds count."],["Zero-cost abstractions","you pay only for what you use, at compile time."]],
+   reach:["You need top-tier performance plus abstractions C can't give.","You're in an existing C++ codebase (engines, CAD, finance).","Deterministic memory matters but you want classes and generics."],
+   avoid:["The language is enormous. Mastery takes years and footguns remain.","A small team without discipline will drown in complexity.","Rust covers much of this ground with safety baked in."],
+   wild:"Unreal Engine, Chromium, LLVM, most AAA games and HFT systems.",
+   code:`#include <vector>\n#include <iostream>\nint main(){\n    std::vector<int> v{1,2,3};\n    for (int x : v) std::cout << x << "\\n";\n}`},
+
+  {id:"zig",name:"Zig",cat:"manual",x:10,y:20,map:true,
+   tagline:"A modern run at replacing C: manual memory, no hidden control flow, fewer footguns.",
+   spec:["imperative","static","manual","compiles native"],
+   tags:["systems","embedded"],
+   good:[["Compile-time code (comptime)","metaprogramming without a separate macro language."],["No hidden allocations","memory is always explicit and visible."],["Excellent C interop","drops into existing C projects cleanly."]],
+   reach:["Replacing C with fewer sharp edges.","Cross-compiling to many targets easily.","Embedded or systems work where you still want manual control."],
+   avoid:["Young, pre-1.0, the language still shifts under you.","You need a deep, mature library ecosystem.","You'd rather have Rust's guarantees enforced."],
+   wild:"The Bun JavaScript runtime is written in Zig; rising in systems and embedded circles.",
+   code:`const std = @import("std");\npub fn main() void {\n    std.debug.print("blink\\n", .{});\n}`},
+
+  {id:"fortran",name:"Fortran",cat:"manual",x:16,y:30,map:true,
+   tagline:"Older than almost everything, still unbeaten for heavy number crunching.",
+   spec:["imperative","static","static / manual","compiles native"],
+   tags:["scientific"],
+   good:[["Array math and HPC","compilers tuned for decades on numerical loops."],["Mature numeric libraries","the BLAS/LAPACK lineage lives here."],["Raw speed on big matrices","still chosen for the largest simulations."]],
+   reach:["Scientific computing: climate models, physics, simulations.","Maintaining existing HPC codebases.","You live in linear algebra."],
+   avoid:["General apps, web, anything modern.","String handling and IO are painful.","Small and shrinking talent pool."],
+   wild:"Weather forecasting, computational physics, and the math libraries behind modern ML.",
+   code:`program hello\n  print *, "compute"\nend program hello`},
+
+  {id:"objc",name:"Objective-C",cat:"safe",x:30,y:52,map:true,
+   tagline:"C with Smalltalk-style messaging. Ran Apple's world before Swift arrived.",
+   spec:["object-oriented","static + dynamic","ARC","compiles native"],
+   tags:["mobile","systems"],
+   good:[["Deep Apple framework access","first-class with the older Cocoa APIs."],["Dynamic runtime","message passing and runtime introspection."],["Mature on macOS/iOS","decades of stable code."]],
+   reach:["Maintaining older iOS/macOS apps.","Interop with existing Objective-C code.","You need the dynamic messaging runtime."],
+   avoid:["New Apple projects (use Swift).","Anything off Apple platforms.","The bracket syntax is an acquired taste."],
+   wild:"Most of macOS and iOS before Swift, still under the hood of many Apple apps.",
+   code:`NSArray *a = @[@"jacob", @"heidi"];\nfor (NSString *n in a)\n    NSLog(@"user: %@", n);`},
+
+  // ---------- safe ----------
+  {id:"rust",name:"Rust",cat:"safe",x:14,y:40,map:true,
+   tagline:"C-class speed, with the compiler refusing to let you corrupt memory.",
+   spec:["multi-paradigm","static","ownership / borrow","compiles native"],
+   tags:["systems","security","devops","backend"],
+   good:[["Memory safety with no GC","the borrow checker proves no double-frees or data races."],["Fearless concurrency","threads without the usual class of crashes."],["Sharp CLI tools and services","fast static binaries, great tooling (cargo)."]],
+   reach:["You'd reach for C/C++ but want safety guaranteed at compile time.","Security or networking tooling where correctness is the point.","Long-lived infra you don't want waking you at 3am."],
+   avoid:["The learning curve is real; the borrow checker fights you early.","You need to prototype something throwaway tonight.","A library you need is only mature in C++ or Python."],
+   wild:"ripgrep, parts of Firefox, Cloudflare's edge, pieces of the Linux kernel.",
+   code:`fn main() {\n    let names = vec!["enspire", "root"];\n    for n in &names {\n        println!("user: {n}");\n    }\n}`},
+
+  {id:"go",name:"Go",cat:"safe",x:30,y:56,map:true,
+   tagline:"Deliberately boring. Compiles fast, runs fast, easy to read at 3am.",
+   spec:["imperative","static","garbage collected","compiles native"],
+   tags:["backend","devops","security","systems","concurrent"],
+   good:[["Network services","goroutines and channels make concurrency simple."],["Single static binaries","build once, scp it, run it. No runtime to install."],["Tooling and CLIs","fast compiles and a tiny language keep teams moving."]],
+   reach:["Self-hosting an API, daemon, or network tool.","You want one binary you can drop on any Linux box.","A team needs to onboard fast and keep code simple."],
+   avoid:["You want rich generics and expressive types (it's plain on purpose).","You need manual memory control or hard real-time.","GUI or heavy numeric work; the ecosystem is thin there."],
+   wild:"Docker, Kubernetes, Terraform, Tailscale, most of modern infra tooling.",
+   code:`package main\nimport "fmt"\nfunc main() {\n    for i := 0; i < 3; i++ {\n        fmt.Println("serving", i)\n    }\n}`},
+
+  {id:"swift",name:"Swift",cat:"safe",x:40,y:68,map:true,
+   tagline:"Apple's modern language: safe, fast, and far friendlier than Objective-C.",
+   spec:["multi-paradigm","static","ARC","compiles native"],
+   tags:["mobile","backend","systems"],
+   good:[["Safe modern syntax at native speed","value types and optionals cut whole bug classes."],["First-class on Apple platforms","the default for new iOS/macOS work."],["Growing server side","Swift on the server is maturing."]],
+   reach:["Building iOS/macOS/Apple apps today.","You want native performance with safety.","Server Swift if you're already in the ecosystem."],
+   avoid:["Cross-platform reach is still Apple-centric.","Windows or Linux GUI work.","The toolchain is heaviest on a Mac."],
+   wild:"Most new iPhone and Mac apps, Apple's own apps, some server backends.",
+   code:`let users = ["jacob", "heidi"]\nfor u in users {\n    print("user: \\(u)")\n}`},
+
+  {id:"ada",name:"Ada",cat:"safe",x:18,y:40,map:true,
+   tagline:"Built so code does not fail. The language of avionics and rail signalling.",
+   spec:["imperative","static (strong)","controlled","compiles native"],
+   tags:["embedded","systems"],
+   good:[["Extreme type safety and contracts","the compiler catches what others ship."],["Designed for life-critical systems","aerospace, defence, rail."],["Readable and explicit","intent is hard to misread."]],
+   reach:["Safety-critical embedded: aircraft, rail, satellites.","You must prove correctness.","Long-lived high-assurance code."],
+   avoid:["Quick scripts or web.","Small ecosystem and talent pool.","The rigour is overkill for low-stakes work."],
+   wild:"Flight control, rail signalling, satellites, defence systems.",
+   code:`with Ada.Text_IO; use Ada.Text_IO;\nprocedure Hello is\nbegin\n   Put_Line ("safe");\nend Hello;`},
+
+  {id:"nim",name:"Nim",cat:"safe",x:32,y:58,map:true,
+   tagline:"Python-like syntax that compiles to fast native code.",
+   spec:["multi-paradigm","static","GC (tunable)","compiles via C"],
+   tags:["systems","scripting"],
+   good:[["Clean syntax, native speed","reads like Python, runs like C."],["Flexible memory","choose a GC or go manual."],["Strong metaprogramming","powerful macros and templates."]],
+   reach:["You want Python's feel with C's speed.","Systems or CLI tools.","Performance-sensitive scripting."],
+   avoid:["Small ecosystem and community.","You need many mature libraries.","Hiring is hard."],
+   wild:"Niche but loved: CLI tools, game experiments, performance-critical scripts.",
+   code:`for i in 0..2:\n  echo "tick ", i`},
+
+  {id:"crystal",name:"Crystal",cat:"safe",x:42,y:66,map:true,
+   tagline:"Looks like Ruby, runs like C. Elegance with static types and native speed.",
+   spec:["object-oriented","static (inferred)","garbage collected","compiles native"],
+   tags:["backend","web"],
+   good:[["Ruby-like syntax, compiled speed","familiar feel, far faster."],["Static typing with inference","types without the noise."],["Good for web backends and CLIs","productive and quick."]],
+   reach:["You love Ruby but need performance.","Web APIs and CLIs.","Greenfield where you can pick freely."],
+   avoid:["Smaller ecosystem than Ruby.","Fewer libraries and jobs.","Some Ruby idioms don't carry over."],
+   wild:"Performance-minded web backends and CLI tools from the Ruby community.",
+   code:`["recon", "report"].each do |s|\n  puts "phase: #{s}"\nend`},
+
+  {id:"d",name:"D",cat:"safe",x:24,y:44,map:true,
+   tagline:"C++'s power with a cleaner design and optional garbage collection.",
+   spec:["multi-paradigm","static","GC (optional)","compiles native"],
+   tags:["systems"],
+   good:[["Systems speed, modern conveniences","C++ capability with less ceremony."],["Choose GC or manual","memory model is yours to pick."],["Strong metaprogramming","compile-time power built in."]],
+   reach:["You want C++ capability with less friction.","Systems and tooling.","Performance with more productivity."],
+   avoid:["Small ecosystem and mindshare.","The optional GC trips up purists.","Alternatives have more momentum."],
+   wild:"Used in some trading systems, game tooling, and performance-heavy backends.",
+   code:`import std.stdio;\nvoid main() {\n    writeln("build");\n}`},
+
+  {id:"cobol",name:"COBOL",cat:"safe",x:24,y:46,map:true,
+   tagline:"Sixty years old and still running the money. Verbose, stubborn, immortal.",
+   spec:["imperative","static","static records","compiles native"],
+   tags:["enterprise","data"],
+   good:[["Built for business records","batch processing of transactions at scale."],["Rock-stable on mainframes","runs untouched for decades."],["Exact decimal math","no floating-point rounding surprises."]],
+   reach:["Maintaining bank, insurance or government mainframe systems.","The code already exists and can't be rewritten cheaply."],
+   avoid:["Anything new.","The syntax is from another era.","Nobody starts a fresh project here."],
+   wild:"A huge share of bank transactions, insurance, and government systems still run on it.",
+   code:`DISPLAY "BALANCE OK".\nSTOP RUN.`},
+
+  // ---------- vm ----------
+  {id:"csharp",name:"C#",cat:"vm",x:48,y:64,map:true,
+   tagline:"Microsoft's workhorse. Strongly typed, huge tooling, runs the .NET world.",
+   spec:["multi-paradigm","static","garbage collected","JIT (CLR)"],
+   tags:["backend","games","mobile","enterprise"],
+   good:[["Windows and enterprise backends","first-class on Microsoft stacks."],["Games via Unity","the scripting language for the top engine."],["Cross-platform now","modern .NET runs on Linux and Mac too."]],
+   reach:["You're in a Microsoft / Windows / Active Directory shop.","Building Unity games or line-of-business apps.","You want a productive, typed, managed language."],
+   avoid:["You want a tiny dependency-free binary.","You're deep in Linux-native or systems work.","Lightweight scripting; the ceremony beats Python's."],
+   wild:"Stack Overflow's backend, Unity games, enterprise .NET services, internal GRC tooling.",
+   code:`var users = new[] { "jacob", "heidi" };\nforeach (var u in users)\n    Console.WriteLine($"user: {u}");`},
+
+  {id:"java",name:"Java",cat:"vm",x:52,y:60,map:true,
+   tagline:"Write once, run anywhere. The JVM's grip on enterprise never loosened.",
+   spec:["object-oriented","static","garbage collected","JIT (JVM)"],
+   tags:["backend","mobile","enterprise"],
+   good:[["Large enterprise systems","mature, stable, battle-tested."],["Cross-platform via JVM","same bytecode runs anywhere."],["Tooling and talent","decades of libraries and engineers."]],
+   reach:["Big, long-lived backends where stability beats novelty.","You need the vast JVM ecosystem (Spring, Kafka).","Hiring matters; the pool is deep."],
+   avoid:["Slow startup and heavy memory hurt CLIs and serverless.","The code is verbose (modern Java helps).","Quick scripts; the boilerplate ratio is bad."],
+   wild:"Most banking backends, Android's roots, Kafka, Elasticsearch, Minecraft (Java edition).",
+   code:`public class Main {\n  public static void main(String[] a){\n    for (int i=0;i<3;i++)\n      System.out.println("tick "+i);\n  }\n}`},
+
+  {id:"kotlin",name:"Kotlin",cat:"vm",x:56,y:66,map:true,
+   tagline:"A modern, concise Java replacement. The default for new Android apps.",
+   spec:["multi-paradigm","static","garbage collected","JIT (JVM) / native"],
+   tags:["mobile","backend"],
+   good:[["Terse and safe vs Java","less boilerplate, same power."],["Null-safety in the type system","whole bug class removed."],["Full JVM ecosystem","everything Java has, cleaner."]],
+   reach:["Android development today.","Modernising a JVM/Java backend.","You want Java's ecosystem without the verbosity."],
+   avoid:["Non-JVM systems work.","You need the absolute largest talent pool.","Tiny throwaway scripts."],
+   wild:"Most new Android apps, plus a growing share of JVM backends.",
+   code:`val users = listOf("jacob", "heidi")\nfor (u in users) println("user: $u")`},
+
+  {id:"scala",name:"Scala",cat:"vm",x:58,y:72,map:true,
+   tagline:"Functional and object-oriented at once, on the JVM. Powerful and dense.",
+   spec:["FP + OO","static","garbage collected","JIT (JVM)"],
+   tags:["backend","data","concurrent"],
+   good:[["Blends FP and OO","a strong type system underneath."],["Big-data tooling","Spark is written in it."],["JVM ecosystem","full Java interop."]],
+   reach:["Data engineering with Spark.","Complex backends that benefit from FP.","Teams that value type safety."],
+   avoid:["The learning curve and complexity are steep.","Compile times can drag.","Simpler problems don't need it."],
+   wild:"Apache Spark, Twitter and LinkedIn backends, data-heavy platforms.",
+   code:`val xs = List("a", "b", "c")\nxs.foreach(x => println(s"item: $x"))`},
+
+  {id:"dart",name:"Dart",cat:"vm",x:60,y:70,map:true,
+   tagline:"Google's language for Flutter. One codebase, apps on every screen.",
+   spec:["object-oriented","static","garbage collected","JIT dev / AOT native"],
+   tags:["mobile","web"],
+   good:[["Powers Flutter","cross-platform UI from one codebase."],["Familiar C-style syntax","easy to pick up."],["Hot reload","fast iteration on UI."]],
+   reach:["One app for iOS, Android, web and desktop via Flutter.","You want a single UI codebase."],
+   avoid:["Outside Flutter it has little reach.","Non-UI or systems work.","You prefer native per-platform tooling."],
+   wild:"Flutter apps everywhere, including Google Pay and many startups' mobile apps.",
+   code:`void main() {\n  for (var s in ['a','b']) print('item: $s');\n}`},
+
+  {id:"groovy",name:"Groovy",cat:"vm",x:70,y:74,map:true,
+   tagline:"A dynamic, scriptable language on the JVM. The glue inside Java tooling.",
+   spec:["multi-paradigm","dynamic / optional static","garbage collected","JIT (JVM)"],
+   tags:["scripting","backend","devops"],
+   good:[["Scripting on the JVM","with full Java interop."],["Powers build and CI tooling","Gradle and Jenkins lean on it."],["Concise DSLs","clean configuration syntax."]],
+   reach:["Writing Gradle build scripts or Jenkins pipelines.","Scripting inside a Java ecosystem.","Quick JVM glue."],
+   avoid:["Large standalone apps (use Kotlin/Java).","Non-JVM work.","Performance-critical paths."],
+   wild:"Gradle build scripts, Jenkins pipelines, and JVM test tooling (Spock).",
+   code:`["build", "test"].each { s ->\n  println "stage: $s"\n}`},
+
+  // ---------- dyn ----------
+  {id:"python",name:"Python",cat:"dyn",x:84,y:88,map:true,
+   tagline:"The universal glue. Reads like pseudocode, ships almost anything.",
+   spec:["multi-paradigm","dynamic","garbage collected","interpreted"],
+   tags:["scripting","data","scientific","security","backend","devops"],
+   good:[["Automation and glue","stitch tools, files and APIs in a few lines."],["Data, ML and analysis","numpy, pandas, PyTorch. The field's default."],["Fast prototyping","idea to working script before coffee cools."]],
+   reach:["Automating a workflow or munging files (PDF to markdown, log parsing).","Anything data, scraping, scripting or quick API.","You want readable code and a library for everything."],
+   avoid:["CPU-bound hot loops; it's slow and the GIL limits threads.","Mobile apps and tight memory environments.","Shipping a single tiny binary to a stranger's machine."],
+   wild:"Most ML and data work, sysadmin scripts, Django/Flask backends, the WizardFuel pipeline.",
+   code:`from pathlib import Path\nfor f in Path(".").glob("*.pdf"):\n    print(f"convert: {f.name}")`},
+
+  {id:"js",name:"JavaScript",cat:"dyn",x:86,y:82,map:true,
+   tagline:"The only language the browser runs. It then escaped onto the server too.",
+   spec:["multi-paradigm","dynamic","garbage collected","interpreted / JIT"],
+   tags:["web","backend"],
+   good:[["Anything in a browser","the one client-side language, no exceptions."],["Full-stack via Node","one language front and back, huge npm."],["Event-driven IO","async by design, good for IO-bound apps."]],
+   reach:["Interactivity on a web page. There's no alternative.","One language across the whole web stack.","Glue, build tooling, or a quick Node server."],
+   avoid:["Large codebases without types get hairy (use TypeScript).","CPU-heavy work; single-threaded by default.","You wanted predictable type behaviour (coercion bites)."],
+   wild:"Every interactive website, VS Code, the Quartz wiki frontend, most of npm.",
+   code:`const tabs = ["wiki", "homelab"];\nfor (const t of tabs) {\n  console.log(\`open: \${t}\`);\n}`},
+
+  {id:"ts",name:"TypeScript",cat:"dyn",x:74,y:80,map:true,
+   tagline:"JavaScript with a type checker bolted on. The grown-up way to write JS.",
+   spec:["multi-paradigm","static (erased)","garbage collected","compiles to JS"],
+   tags:["web","backend"],
+   good:[["Types over JavaScript","catch whole bug classes before runtime."],["Scales to large apps","interfaces and tooling keep big frontends sane."],["Same reach as JS","compiles to plain JavaScript."]],
+   reach:["Any JavaScript project past a few hundred lines.","A frontend or Node backend a team maintains.","You want autocomplete and safe refactors."],
+   avoid:["A five-line throwaway script; the build step isn't worth it.","You need types enforced at runtime (they're erased).","The team won't commit to the discipline."],
+   wild:"Most serious frontends now: Angular, large React apps, VS Code, internal dashboards.",
+   code:`type User = { name: string; cleared: boolean };\nconst u: User = { name: "jacob", cleared: true };\nconsole.log(u.name);`},
+
+  {id:"php",name:"PHP",cat:"dyn",x:80,y:74,map:true,
+   tagline:"Built for the web, runs a huge slice of it. Modern PHP is genuinely fine.",
+   spec:["imperative / OO","dynamic","garbage collected","interpreted"],
+   tags:["backend","web"],
+   good:[["Web backends","designed for request/response, cheap to host."],["Content sites","WordPress runs a large fraction of the web."],["Fast to deploy","drop a file on a PHP server and it works."]],
+   reach:["A traditional server-rendered site or CMS.","Working with WordPress, Laravel or an existing PHP app.","Cheap shared hosting is the target."],
+   avoid:["Systems work, CLIs, or anything off the web.","Greenfield with no PHP history (alternatives are stronger).","CPU-heavy or long-running compute."],
+   wild:"WordPress, Wikipedia's backend, Slack's early days, Laravel apps.",
+   code:`<?php\n$pages = ["home", "tower"];\nforeach ($pages as $p) {\n    echo "render: $p\\n";\n}`},
+
+  {id:"perl",name:"Perl",cat:"dyn",x:78,y:66,map:true,
+   tagline:"The original sysadmin Swiss Army chainsaw. Regex flows in its veins.",
+   spec:["multi-paradigm","dynamic","garbage collected","interpreted"],
+   tags:["scripting","security","devops"],
+   good:[["Text and regex","still unmatched for gnarly one-liners over logs."],["Sysadmin glue","quick scripts to wrangle files and pipelines."],["Legacy maintenance","decades of scripts quietly running."]],
+   reach:["Slicing through log files with heavy regex.","Maintaining existing Perl tooling.","A throwaway one-liner faster than anywhere else."],
+   avoid:["New large projects; readability and hiring suffer.","Anything Python now does more clearly.","Teams that don't already know it."],
+   wild:"Old-school sysadmin scripts, bioinformatics pipelines, legacy CGI and log processing.",
+   code:`my @lines = ("ok 200", "err 500");\nfor my $l (@lines) {\n    print "$l\\n" if $l =~ /\\d{3}/;\n}`},
+
+  {id:"ruby",name:"Ruby",cat:"dyn",x:92,y:90,map:true,
+   tagline:"Optimised for developer happiness. Reads like English, bends to your will.",
+   spec:["object-oriented","dynamic","garbage collected","interpreted"],
+   tags:["backend","scripting","security"],
+   good:[["Web apps via Rails","convention over configuration, ship an MVP fast."],["Expressive DSLs","the language bends into clean syntax."],["Readable scripting","elegant for glue and internal tools."]],
+   reach:["Building a web app fast with Rails.","You want code that's a pleasure to read.","Scripting where expressiveness beats raw speed."],
+   avoid:["CPU-bound or high-concurrency workloads; not fast.","Tiny static deployments.","You need a massive talent pool."],
+   wild:"GitHub, Shopify, early Twitter, plus security tools like Metasploit and Vagrant.",
+   code:`%w[recon exploit report].each do |phase|\n  puts "phase: #{phase}"\nend`},
+
+  {id:"lua",name:"Lua",cat:"dyn",x:88,y:70,map:true,
+   tagline:"Tiny, fast, embeddable. The scripting layer dropped inside other programs.",
+   spec:["multi-paradigm","dynamic","garbage collected","interpreted / JIT"],
+   tags:["games","scripting","embedded"],
+   good:[["Trivially embeddable","drops into a C/C++ host."],["Tiny and fast","tiny footprint, quick startup."],["Simple clean core","small language, easy to learn."]],
+   reach:["Scripting inside a game engine or app.","An extension layer for a C program.","Embedded where size matters."],
+   avoid:["Large standalone applications.","You need a big standard library.","Heavy data work."],
+   wild:"Game scripting (Roblox, WoW addons), Redis, Nginx (OpenResty), Neovim config.",
+   code:`for _, s in ipairs({"a","b"}) do\n  print("item: "..s)\nend`},
+
+  {id:"r",name:"R",cat:"dyn",x:86,y:84,map:true,
+   tagline:"Statistics as a first language. Built by and for data analysts.",
+   spec:["multi-paradigm","dynamic","garbage collected","interpreted"],
+   tags:["data","scientific"],
+   good:[["Statistics out of the box","models and tests built in."],["Superb plotting","ggplot2 sets the bar."],["The academic stats standard","papers and packages assume it."]],
+   reach:["Statistical analysis and research.","Exploratory data work and charts.","Reproducible reports."],
+   avoid:["General-purpose apps or systems.","Production engineering (Python scales better).","Large software projects."],
+   wild:"Academic research, biostatistics, clinical trials, data journalism.",
+   code:`x <- c(1, 2, 3)\nprint(mean(x))`},
+
+  {id:"julia",name:"Julia",cat:"dyn",x:70,y:86,map:true,
+   tagline:"Built to make scientific code both easy to write and genuinely fast.",
+   spec:["multi-paradigm","dynamic","garbage collected","JIT (LLVM)"],
+   tags:["scientific","data"],
+   good:[["Near-C speed for numerics","fast loops without dropping to C."],["Math-friendly syntax","reads like the equations."],["Solves the two-language split","prototype and ship in one."]],
+   reach:["Heavy numerical or scientific computing.","You want speed without leaving a high-level language.","Simulations and modelling."],
+   avoid:["General apps and web.","Slow first-run compile latency.","Smaller ecosystem than Python."],
+   wild:"Scientific computing, climate modelling, quantitative finance, research labs.",
+   code:`for i in 1:3\n    println("step ", i)\nend`},
+
+  {id:"powershell",name:"PowerShell",cat:"dyn",x:90,y:64,map:true,
+   tagline:"Windows automation that passes objects, not just text. The admin's power tool.",
+   spec:["imperative","dynamic","garbage collected","interpreted (.NET)"],
+   tags:["scripting","devops","security"],
+   good:[["Object pipeline","pass structured data, not raw strings."],["Deep Windows control","AD, Azure, and the OS itself."],["Built into Windows","already there on every box."]],
+   reach:["Automating Windows, Active Directory or Azure.","Admin and GRC scripting.","Pulling system state for audits."],
+   avoid:["Cross-platform-first work (though it runs on Linux now).","Heavy application logic.","Non-Microsoft shops."],
+   wild:"Windows administration, Active Directory management, Azure automation, blue-team tooling.",
+   code:`$users = "jacob","heidi"\nforeach ($u in $users) { "user: $u" }`},
+
+  {id:"matlab",name:"MATLAB",cat:"dyn",x:82,y:82,map:true,
+   tagline:"A numerical lab in a language. Matrices, plots and toolboxes for engineers.",
+   spec:["imperative","dynamic","managed","interpreted (proprietary)"],
+   tags:["scientific","data"],
+   good:[["Matrix math built in","linear algebra is the native idiom."],["Rich engineering toolboxes","signals, control, images."],["Excellent plotting","fast visual feedback."]],
+   reach:["Engineering and control-systems work.","Signal or image processing.","You already have a licence."],
+   avoid:["General software (proprietary and pricey).","Production deployment.","Open-source projects (Python/Julia fit better)."],
+   wild:"Control systems, signal processing, mechanical and electrical engineering, academia.",
+   code:`x = [1 2 3];\ndisp(mean(x))`},
+
+  {id:"vba",name:"VBA",cat:"dyn",x:88,y:60,map:true,
+   tagline:"The macro language hiding inside Excel and Office. Quietly runs the back office.",
+   spec:["imperative","dynamic","managed","interpreted (Office host)"],
+   tags:["scripting","enterprise"],
+   good:[["Automate Office from inside","Excel, Word, Outlook scripting."],["No install beyond Office","it's already on the machine."],["Quick office wins","small workflows, fast."]],
+   reach:["Automating spreadsheets and Office documents.","Quick internal tools where Office is the platform.","Maintaining legacy macros."],
+   avoid:["Anything outside Office.","Real software engineering.","Security-sensitive automation (macros are an attack vector)."],
+   wild:"Countless finance spreadsheets, report generators, and office automations worldwide.",
+   code:`Sub Greet()\n    MsgBox "report ready"\nEnd Sub`},
+
+  {id:"tcl",name:"Tcl",cat:"dyn",x:91,y:68,map:true,
+   tagline:"A small, embeddable scripting language. Everything is a string, or a command.",
+   spec:["imperative","dynamic","garbage collected","interpreted"],
+   tags:["scripting"],
+   good:[["Tiny and embeddable","slots into other tools easily."],["Test harnesses and EDA","long used in chip-design flows."],["Brought us Tk","the classic cross-platform GUI kit."]],
+   reach:["Scripting inside tools that embed it (network gear, EDA).","Maintaining legacy Tcl.","Quick Tk GUIs."],
+   avoid:["New general-purpose projects.","Large codebases.","You want a modern ecosystem."],
+   wild:"Cisco device scripting (Expect), chip-design tools, legacy test automation.",
+   code:`foreach s {a b c} {\n    puts "item: $s"\n}`},
+
+  // ---------- functional ----------
+  {id:"haskell",name:"Haskell",cat:"funcl",x:22,y:95,map:true,
+   tagline:"Pure functional programming taken seriously. The compiler is your proof assistant.",
+   spec:["pure functional","static (strong)","garbage collected","compiles native (GHC)"],
+   tags:["backend","scientific"],
+   good:[["A type system that catches deep bugs","if it compiles, it often just works."],["Pure, predictable functions","no hidden state or side effects."],["Powerful abstractions","express a lot with very little."]],
+   reach:["Correctness-critical logic (compilers, finance).","You want the type checker to enforce invariants.","You enjoy the rigour."],
+   avoid:["Quick scripts or deadline prototyping.","Teams new to FP (steep curve).","You need broad, ready-made libraries."],
+   wild:"Compilers, financial modelling, and anywhere correctness outweighs speed of writing.",
+   code:`main :: IO ()\nmain = mapM_ putStrLn ["a", "b"]`},
+
+  {id:"ocaml",name:"OCaml",cat:"funcl",x:26,y:88,map:true,
+   tagline:"Practical functional programming, fast and pragmatic. Beloved in compilers and finance.",
+   spec:["functional + imperative","static (inferred)","garbage collected","compiles native"],
+   tags:["backend","systems"],
+   good:[["Fast compiled FP","type inference, no ceremony."],["Pragmatic, not purely pure","mutate when you must."],["Great for language tooling","compilers and analysers."]],
+   reach:["Writing compilers, analysers or verification tools.","Trading systems.","You want FP that ships fast code."],
+   avoid:["You need a huge ecosystem.","Teams without FP background.","General web or app glue."],
+   wild:"Compilers, static analysers, Jane Street's trading systems, the early Rust compiler.",
+   code:`let () =\n  List.iter print_endline ["a"; "b"]`},
+
+  {id:"fsharp",name:"F#",cat:"funcl",x:50,y:86,map:true,
+   tagline:"Functional-first on .NET. The pragmatic way to do FP in a Microsoft shop.",
+   spec:["functional-first","static (inferred)","garbage collected","JIT (.NET)"],
+   tags:["backend","data"],
+   good:[["Clean FP with full .NET access","the ecosystem of C#, fewer bugs."],["Great for data and domain modelling","types that mirror the domain."],["Concise and safe","less code, less to go wrong."]],
+   reach:["FP on the .NET stack.","Financial or data modelling.","You want fewer bugs than C# with the same ecosystem."],
+   avoid:["Teams committed to C#/OO.","Non-.NET environments.","You need the largest hiring pool."],
+   wild:"Finance, data science, and domain-heavy backends inside .NET organisations.",
+   code:`["a"; "b"] |> List.iter (printfn "item: %s")`},
+
+  {id:"clojure",name:"Clojure",cat:"funcl",x:76,y:90,map:true,
+   tagline:"A modern Lisp on the JVM. Immutable data and a REPL-driven workflow.",
+   spec:["functional (Lisp)","dynamic","garbage collected","JIT (JVM)"],
+   tags:["backend","data","concurrent"],
+   good:[["Immutable by default","state bugs largely vanish."],["Interactive REPL development","build the program while it runs."],["Full JVM ecosystem","Java libraries at hand."]],
+   reach:["Data-heavy backends.","Concurrent systems where immutability helps.","You want Lisp's expressiveness on the JVM."],
+   avoid:["Teams allergic to parentheses.","You need static types.","Simple CRUD apps don't need it."],
+   wild:"Data platforms, fintech backends, and teams that value REPL-driven development.",
+   code:`(doseq [s ["a" "b"]]\n  (println "item:" s))`},
+
+  {id:"elixir",name:"Elixir",cat:"funcl",x:66,y:84,map:true,
+   tagline:"Ruby-like joy on the battle-tested Erlang VM. Built for massive concurrency.",
+   spec:["functional","dynamic","garbage collected","BEAM VM"],
+   tags:["backend","web","concurrent"],
+   good:[["Millions of lightweight processes","concurrency as a first principle."],["Fault-tolerant (let it crash)","supervisors restart what breaks."],["Pleasant syntax","Ruby-like and readable."]],
+   reach:["Real-time systems (chat, messaging, live updates).","Highly concurrent backends.","You need uptime and scale."],
+   avoid:["CPU-bound number crunching.","Small simple sites.","Teams unfamiliar with the actor model."],
+   wild:"Discord's chat infrastructure, real-time web apps via Phoenix, messaging platforms.",
+   code:`["a", "b"]\n|> Enum.each(fn s -> IO.puts("item: " <> s) end)`},
+
+  {id:"erlang",name:"Erlang",cat:"funcl",x:60,y:80,map:true,
+   tagline:"Telecom-grade reliability. Designed for systems that must never go down.",
+   spec:["functional","dynamic","garbage collected","BEAM VM"],
+   tags:["backend","concurrent"],
+   good:[["Nine-nines uptime","process isolation keeps faults local."],["Hot code-swapping","upgrade a running system live."],["Massive concurrency","built for it from day one."]],
+   reach:["Telecom, messaging, systems where downtime is unacceptable.","Distributed fault-tolerant services."],
+   avoid:["Number crunching or general apps.","The syntax is unusual.","Smaller talent pool."],
+   wild:"Telephone switches, WhatsApp's backend, RabbitMQ, and the VM Elixir runs on.",
+   code:`lists:foreach(fun(S) ->\n  io:format("item: ~s~n", [S])\nend, ["a","b"]).`},
+
+  {id:"elm",name:"Elm",cat:"funcl",x:72,y:88,map:true,
+   tagline:"A functional frontend language that promises no runtime exceptions.",
+   spec:["pure functional","static (strong)","garbage collected","compiles to JS"],
+   tags:["web"],
+   good:[["No runtime errors in practice","the compiler rules them out."],["Friendly compiler messages","errors that teach."],["A clean, enforced architecture","one sane way to structure apps."]],
+   reach:["Frontends where reliability beats ecosystem size.","You want guaranteed-safe UI code.","Learning FP gently."],
+   avoid:["You need the vast JS/React ecosystem.","Rapid hiring.","The language evolves slowly."],
+   wild:"Reliability-focused web frontends, loved by a small devoted community.",
+   code:`import Html exposing (text)\nmain = text "no crashes"`},
+
+  {id:"lisp",name:"Lisp",cat:"funcl",x:70,y:92,map:true,
+   tagline:"The ancient, shape-shifting language. Code is data; the language bends to you.",
+   spec:["multi-paradigm (Lisp)","dynamic","garbage collected","compiles native"],
+   tags:["backend","scientific"],
+   good:[["Macros that reshape the language","build the syntax you wish you had."],["Interactive, malleable development","change the program as it runs."],["Decades of AI heritage","the classic research language."]],
+   reach:["Problems where you build your own language upward.","Research and symbolic AI.","Long-lived expert systems."],
+   avoid:["Teams wanting mainstream tooling.","The ecosystem is niche now.","Conventions vary wildly."],
+   wild:"Classic AI research, some aerospace and CAD systems, and a devoted modern niche.",
+   code:`(dolist (s '("a" "b"))\n  (format t "item: ~a~%" s))`},
+
+  // ---------- declarative (off-map) ----------
+  {id:"sql",name:"SQL",cat:"decl",map:false,
+   tagline:"You describe the data you want; the engine works out how to get it.",
+   spec:["declarative","n/a","n/a","query language"],
+   tags:["data","backend"],
+   good:[["Querying relational data","filter, join and aggregate millions of rows fast."],["The lingua franca of data","Postgres, MySQL, SQLite all speak dialects."],["Set-based thinking","one statement does what loops labour over."]],
+   reach:["Any time data lives in a relational database. Almost always.","Reporting, analytics, joining datasets.","You want the database doing the heavy lifting."],
+   avoid:["It isn't general-purpose. No app logic lives here.","Deeply nested or graph data fits awkwardly.","Procedural work belongs in the host language."],
+   wild:"Behind nearly every app with data: that ACTEBA dashboard, every backend, every analytics query.",
+   code:`SELECT player, SUM(wins) AS total\nFROM matches\nWHERE division = 2\nGROUP BY player\nORDER BY total DESC;`},
+
+  {id:"html",name:"HTML",cat:"decl",map:false,
+   tagline:"The skeleton of every web page. Structure and meaning, not logic.",
+   spec:["markup","n/a","n/a","parsed by browser"],
+   tags:["web"],
+   good:[["Document structure","headings, lists, links, forms. The bones."],["Semantics","tells browsers and screen readers what content means."],["Universal","every browser on earth renders it."]],
+   reach:["Any web page, app or email. The substrate.","Defining what's on the page, before style or behaviour.","Always, if a browser is involved."],
+   avoid:["It computes nothing. Don't expect logic from markup.","Layout and looks; that's CSS.","Interactivity; that's JavaScript."],
+   wild:"Literally every web page you've opened, including this one.",
+   code:`<article>\n  <h1>Wizard Tower</h1>\n  <p>LAN-hosted notes.</p>\n  <a href="/wiki">Enter</a>\n</article>`},
+
+  {id:"css",name:"CSS",cat:"decl",map:false,
+   tagline:"The paint and layout layer. Describes how the HTML should look.",
+   spec:["declarative","n/a","n/a","applied by browser"],
+   tags:["web"],
+   good:[["Layout and style","grid, flexbox, spacing, colour, type."],["Responsive design","one page across phone, tablet, monitor."],["Animation","motion without a line of JavaScript."]],
+   reach:["Styling anything on the web. No real alternative.","Layout, theming and responsive behaviour.","Pairs with every HTML page ever made."],
+   avoid:["It's not programming. No real logic or data.","Complex app state; that's JavaScript.","Heavy templating; reach for a framework on top."],
+   wild:"The look of every site on the web, from brutalist blogs to this guide.",
+   code:`.card {\n  display: grid;\n  gap: 16px;\n  border-radius: 14px;\n}`}
+];
+
+/* ---------- map render ---------- */
+const VB={w:1100,h:740}, PX={l:72,r:44,t:44,b:72};
+const plotW=VB.w-PX.l-PX.r, plotH=VB.h-PX.t-PX.b;
+const sx=v=>PX.l+(v/100)*plotW;
+const sy=v=>PX.t+((100-v)/100)*plotH;
+
+const gridG=document.getElementById("grid");
+for(let i=0;i<=4;i++){
+  const x=PX.l+(i/4)*plotW, y=PX.t+(i/4)*plotH;
+  gridG.insertAdjacentHTML("beforeend",
+    `<line class="grid-line" x1="${x}" y1="${PX.t}" x2="${x}" y2="${PX.t+plotH}"/>`+
+    `<line class="grid-line" x1="${PX.l}" y1="${y}" x2="${PX.l+plotW}" y2="${y}"/>`);
+}
+
+const nodesG=document.getElementById("nodes");
+const tip=document.getElementById("tip");
+const shell=document.querySelector(".map-shell");
+const nodeEls={};
+
+LANGS.filter(l=>l.map).forEach(l=>{
+  const x=sx(l.x), y=sy(l.y);
+  const right=l.x>62;
+  const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+  g.setAttribute("class","node"); g.setAttribute("data-id",l.id);
+  g.setAttribute("tabindex","0"); g.setAttribute("role","button");
+  g.setAttribute("aria-label",l.name+". "+l.tagline);
+  g.innerHTML=
+    `<circle class="ring" cx="${x}" cy="${y}" r="12" stroke="${CAT[l.cat].color}"></circle>`+
+    `<circle class="dot" cx="${x}" cy="${y}" r="5" fill="${CAT[l.cat].color}"></circle>`+
+    `<text x="${right?x-14:x+14}" y="${y+4}" text-anchor="${right?"end":"start"}">${l.name}</text>`;
+  const dot=g.querySelector(".dot");
+  const showTip=()=>{
+    const sr=shell.getBoundingClientRect(), dr=dot.getBoundingClientRect();
+    tip.innerHTML=`<b>${l.name}</b><span>${l.tagline}</span>`;
+    tip.style.left=(dr.left-sr.left+dr.width/2)+"px";
+    tip.style.top=(dr.top-sr.top-6)+"px";
+    tip.classList.add("on");
+  };
+  const hideTip=()=>tip.classList.remove("on");
+  g.addEventListener("mouseenter",showTip);
+  g.addEventListener("mouseleave",hideTip);
+  g.addEventListener("focus",showTip);
+  g.addEventListener("blur",hideTip);
+  g.addEventListener("click",()=>selectLang(l.id));
+  g.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();selectLang(l.id);}});
+  nodesG.appendChild(g);
+  nodeEls[l.id]=g;
+});
+
+/* legend */
+const legend=document.getElementById("legend");
+Object.values(CAT).forEach(c=>{
+  legend.insertAdjacentHTML("beforeend",`<span><i style="background:${c.color}"></i>${c.label}</span>`);
+});
+
+/* declarative lane */
+const lane=document.getElementById("lane");
+LANGS.filter(l=>!l.map).forEach(l=>{
+  const b=document.createElement("button");
+  b.className="lane-chip"; b.type="button"; b.innerHTML=`<i></i>${l.name}`;
+  b.addEventListener("click",()=>selectLang(l.id));
+  lane.appendChild(b);
+});
+
+/* label toggle */
+let showAllLabels=false, selectedId=null, activeDomain="all";
+const lblBtn=document.getElementById("lblToggle");
+lblBtn.addEventListener("click",()=>{
+  showAllLabels=!showAllLabels;
+  lblBtn.classList.toggle("on",showAllLabels);
+  lblBtn.setAttribute("aria-pressed",showAllLabels?"true":"false");
+  lblBtn.textContent=showAllLabels?"hide all labels":"show all labels";
+  updateLabels();
+});
+
+function updateLabels(){
+  LANGS.filter(l=>l.map).forEach(l=>{
+    const match=activeDomain==="all"?false:l.tags.includes(activeDomain);
+    const on=showAllLabels||l.id===selectedId||(activeDomain!=="all"&&match);
+    nodeEls[l.id].classList.toggle("lbl",on);
+  });
+}
+
+/* filters */
+const filtersEl=document.getElementById("filters");
+const countEl=document.getElementById("count");
+DOMAINS.forEach(([id,label])=>{
+  const b=document.createElement("button");
+  b.className="chip"+(id==="all"?" active":""); b.type="button";
+  b.textContent=label; b.dataset.dom=id;
+  b.addEventListener("click",()=>setDomain(id));
+  filtersEl.appendChild(b);
+});
+
+function setDomain(dom){
+  activeDomain=dom;
+  document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("active",c.dataset.dom===dom));
+  let n=0;
+  document.querySelectorAll(".card").forEach(card=>{
+    const tags=card.dataset.tags.split(",");
+    const show=dom==="all"||tags.includes(dom);
+    card.classList.toggle("hide",!show);
+    if(show)n++;
+  });
+  LANGS.filter(l=>l.map).forEach(l=>{
+    nodeEls[l.id].classList.toggle("dim",dom!=="all"&&!l.tags.includes(dom));
+  });
+  countEl.textContent=dom==="all"
+    ? `${LANGS.length} languages \u00b7 ${LANGS.filter(l=>l.map).length} on the map`
+    : `${n} languages fit "${DOMAINS.find(d=>d[0]===dom)[1]}"`;
+  updateLabels();
+}
+
+/* cards */
+const grid=document.getElementById("grid");
+LANGS.forEach(l=>{
+  const card=document.createElement("div");
+  card.className="card"; card.id="card-"+l.id; card.dataset.tags=l.tags.join(",");
+  const badge=l.cat==="decl"?"not a prog. lang":CAT[l.cat].label;
+  const top=document.createElement("div");
+  top.className="card-top"; top.tabIndex=0; top.setAttribute("role","button"); top.setAttribute("aria-expanded","false");
+  top.innerHTML=
+    `<div class="card-name-row">
+       <span class="swatch" style="background:${CAT[l.cat].color}"></span>
+       <h3 class="card-name">${l.name}</h3>
+       <span class="badge">${badge}</span>
+     </div>
+     <p class="card-tagline">${l.tagline}</p>
+     <div class="spec">${l.spec.map(s=>`<b>${s}</b>`).join("")}</div>
+     <div class="toggle"><span class="arr">&#9656;</span> what it's for, when to reach</div>`;
+  const detail=document.createElement("div"); detail.className="detail";
+  const di=document.createElement("div"); di.className="detail-inner";
+  di.innerHTML=
+    `<div class="blk good"><h4>Good at</h4><ul>${l.good.map(([h,b])=>`<li><b>${h}.</b> ${b}</li>`).join("")}</ul></div>
+     <div class="blk"><h4>Reach for it when</h4><ul>${l.reach.map(r=>`<li>${r}</li>`).join("")}</ul></div>
+     <div class="blk avoid"><h4>Avoid it when</h4><ul>${l.avoid.map(r=>`<li>${r}</li>`).join("")}</ul></div>
+     <p class="wild"><b>In the wild:</b> ${l.wild}</p>`;
+  const pre=document.createElement("pre"); const codeEl=document.createElement("code");
+  codeEl.textContent=l.code; pre.appendChild(codeEl); di.appendChild(pre);
+  detail.appendChild(di); card.appendChild(top); card.appendChild(detail); grid.appendChild(card);
+  const toggle=()=>{const open=card.classList.toggle("open");top.setAttribute("aria-expanded",open?"true":"false");};
+  top.addEventListener("click",toggle);
+  top.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle();}});
+});
+
+function selectLang(id){
+  selectedId=id;
+  document.querySelectorAll(".node").forEach(n=>n.classList.toggle("sel",n.dataset.id===id));
+  updateLabels();
+  const card=document.getElementById("card-"+id);
+  if(!card)return;
+  card.classList.add("open");
+  card.querySelector(".card-top").setAttribute("aria-expanded","true");
+  card.scrollIntoView({behavior:"smooth",block:"center"});
+  card.classList.add("flash");
+  setTimeout(()=>card.classList.remove("flash"),1200);
+}
+
+setDomain("all");
+</script>
+</body>
+</html>
