@@ -28,7 +28,8 @@
     background-image:radial-gradient(circle at 18% -10%, #1a2738 0, transparent 45%),
                      radial-gradient(circle at 95% 0%, #1d2230 0, transparent 40%);
   }
-  .wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+  .wrap{width:100%;margin:0 auto;padding:0 clamp(20px,3.5vw,72px)}
+  footer .wrap{max-width:1100px}
   a{color:var(--teal)}
 
   header{padding:64px 0 28px}
@@ -46,7 +47,7 @@
 
   /* map */
   .map-shell{background:linear-gradient(180deg,var(--bg2),var(--surface));border:1px solid var(--line);border-radius:16px;padding:14px;position:relative}
-  .map-svg{display:block;width:100%;height:auto}
+  .map-svg{display:block;width:100%;height:auto;max-height:82vh}
   .grid-line{stroke:var(--line);stroke-width:1;stroke-dasharray:3 6;opacity:.45}
   .axis-label{font-family:"JetBrains Mono",monospace;font-size:13px;fill:var(--ink-faint);letter-spacing:.04em}
   .node{cursor:pointer;outline:none}
